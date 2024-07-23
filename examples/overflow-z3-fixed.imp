@@ -1,0 +1,15 @@
+balance := 0;
+deposit := 2147483647;
+bonus := 10;
+
+maxDeposit := 100000;
+
+if (1000 <= deposit) {
+    if (deposit <= maxDeposit) {
+        balance := balance + deposit * bonus
+    } else {
+        balance := balance + maxDeposit * bonus
+    }
+} else {
+    balance := balance + deposit
+}

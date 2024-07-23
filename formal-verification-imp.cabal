@@ -1,0 +1,42 @@
+cabal-version:      3.0
+name:               formal-verification-imp
+version:            0.1.0.0
+-- synopsis:
+-- description:
+-- license:
+license-file:       LICENSE
+author:             Ezequiel Perez
+-- maintainer
+-- copyright:
+build-type:         Simple
+extra-doc-files:    README.md
+-- extra-source-files:
+
+common warnings
+    ghc-options: -Wall
+
+common shared
+    default-extensions:
+        ImportQualifiedPost
+        LambdaCase
+
+executable formal-verification-imp
+    import:           warnings, shared
+    main-is:          Main.hs
+
+    other-modules:
+        Interpreter
+        Parser
+        SMT
+    -- other-extensions:
+    build-depends:
+        base       ^>=4.17.2.1,
+        parsec     ^>=3.1.16.1,
+        containers ^>=0.6.7,
+        z3         ^>=408.2
+
+    include-dirs:     "C:\\z3-4.8.12-x64-win\\include"
+    extra-lib-dirs:   "C:\\z3-4.8.12-x64-win\\bin"
+
+    hs-source-dirs:   app
+    default-language: Haskell2010

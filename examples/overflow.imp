@@ -1,0 +1,9 @@
+deposit := 2147483647;
+balance := 0;
+bonus := 10;
+
+if (1000 <= deposit) {
+    balance := balance + deposit * bonus
+} else {
+    balance := balance + deposit
+}
