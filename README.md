@@ -26,7 +26,7 @@ This project is a Haskell implementation of a simple imperative language (IMP) p
    - Pre-built binaries are available for Windows, Linux and macOS [here](https://github.com/Z3Prover/z3/releases).
    - Bug fixing: [1](https://stackoverflow.com/questions/73279979/installing-z3-haskell-bindings-on-windows), [2](https://cabal.readthedocs.io/en/3.4/cabal-project.html#foreign-function-interface-options), [3](https://stackoverflow.com/questions/77253044/installing-z3-binding-with-haskell-on-mac).
 
-2. Set the path to the Z3 binary in the [`.cabal` file](formal-verification-z3.cabal), under the `include-dirs` and `extra-lib-dirs` fields.
+2. Set the path to the Z3 binary in the [`.cabal` file](formal-verification-imp.cabal), under the `include-dirs` and `extra-lib-dirs` fields.
 3. Add the `z3` executable inside the `bin` directory to the system PATH.
 4. Build the project.
 
