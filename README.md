@@ -94,6 +94,8 @@ Here, we have an assertion that checks if the `a` variable is equal to `3` at th
 - `#assume` is used to specify an assumption that restricts the possible values of a variable.
 - `#assert` is used to specify a property that we want to verify.
 
+Both directives can take any boolean expression as an argument, including expressions that involve multiple variables.
+
 To verify the properties in the `inline-spec.imp` program, we can use the `runZ3InlineSpecExample` function:
 
 ```hs
