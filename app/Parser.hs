@@ -49,6 +49,8 @@ stmt = foldl Seq Skip <$> sepBy1 statement (symbol ";")
                  <|> While <$> (reserved "while" *> bexp)
                            <*> braces stmt
                  <|> Set <$> (varId <* reservedOp ":=") <*> aexp
+                 <|> Assert <$> (reservedOp "#assert" *> parens bexp)
+                 <|> Assume <$> (reservedOp "#assume" *> parens bexp)
 
 parseSrc :: SourceName -> String -> Either ParseError Stmt
 parseSrc = parse (stmt <* eof)

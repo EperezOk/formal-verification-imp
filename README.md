@@ -1,11 +1,11 @@
 # Formal Verification of an Imperative Language
 
-This project is a Haskell implementation of a simple imperative language (IMP) parser and interpreter, along with a Z3 solver that can verify invariants in the IMP programs. It includes:
+This project is a Haskell implementation of a simple imperative language (IMP) parser and interpreter, along with a compiler that converts the IMP programs to SMT formulas to verify properties about them. In particular, the project includes:
 
 - A simple imperative language (IMP) interpreter, which can run IMP programs and output their final state.
 - A parser for the IMP language.
-- A compiler that turns and IMP AST into a Z3 AST, while adding constraints to the Z3 solver.
-- A Z3 solver that can constrain the input variables of an IMP program and assert that certain invariants hold in the final state.
+- A compiler that turns an IMP AST into SMT formulas, represented as a Z3 AST.
+- Functions to verify properties in IMP programs using the [Z3 solver](https://github.com/Z3Prover/z3).
 
 ## Table of Contents
 
@@ -14,6 +14,7 @@ This project is a Haskell implementation of a simple imperative language (IMP) p
   - [Setup](#setup)
   - [Usage](#usage)
     - [Running the IMP interpreter](#running-the-imp-interpreter)
+    - [Formally Verifying Inlined Properties](#formally-verifying-inlined-properties)
     - [Running the Z3 solver](#running-the-z3-solver)
       - [Overflow Example](#overflow-example)
       - [Greatest Common Divisor Example](#greatest-common-divisor-example)
@@ -67,6 +68,61 @@ Seq (Seq (Seq (Seq (Seq Skip (Set a (Lit 419990535))) (Set b (Lit 202590585))) (
 
 [(b,135),(a,135),(d,0)]
 ```
+
+### Formally Verifying Inlined Properties
+
+The simplest way to verify properties about an IMP program is to inline the properties directly into the program. This can be done by adding assertions to the program that check the properties we want to verify.
+
+Let's take the [`inline-spec.imp`](examples/inline-spec.imp) IMP program as an example:
+
+```imp
+a := 3;
+
+#assume(!(b == 5));
+
+if (b == 5) {
+    a := 10
+} else {
+    a := 3
+};
+
+#assert(a == 3)
+```
+
+Here, we have an assertion that checks if the `a` variable is equal to `3` at the end of the program. We also have an assumption that the `b` variable is not equal to `5`. Note that the `#assume` and `#assert` directives are not part of the IMP language, but are used here to specify the properties we want to verify.
+
+- `#assume` is used to specify an assumption that restricts the possible values of a variable.
+- `#assert` is used to specify a property that we want to verify.
+
+To verify the properties in the `inline-spec.imp` program, we can use the `runZ3InlineSpecExample` function:
+
+```hs
+runZ3WithInlineSpec "examples/inline-spec.imp"
+```
+
+In this case, all properties hold, and we get the following output:
+
+```text
+SUCCESS: All assertions hold
+```
+
+However, if we remove the `#assume` directive from the program, the solver will find a counterexample that violates the property:
+
+```text
+ERROR: Assertions do not hold.
+
+Counterexample:
+b!0 -> #x00000005
+b!5 -> #x00000005
+a!4 -> #x0000000a
+a!3 -> #x00000003
+a!2 -> #x0000000a
+a!1 -> #x00000003
+```
+
+This output shows that the `b` variable was assigned the value `5` by the solver, which makes the `a` variable equal to `10` (or `0x0a`, in hex) at the end of the program, violating the assertion `a == 3`.
+
+A more detailed explanation of the output of the solver can be found in the next section.
 
 ### Running the Z3 solver
 

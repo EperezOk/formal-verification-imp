@@ -41,7 +41,10 @@ data Stmt
   | Seq Stmt Stmt      -- consecutive statements
   | If BExp Stmt Stmt -- if-then-else
   | While BExp Stmt   -- while loop
+  | Assert BExp       -- assertion
+  | Assume BExp       -- assumption
   deriving (Show, Eq)
+
 
 -- | Interpreter
 
@@ -64,6 +67,8 @@ evalBExp scope (Not e)      = not <$> evalBExp scope e
 
 evalStmt :: Scope -> Stmt -> Maybe Scope
 evalStmt scope Skip                   = Just scope
+evalStmt scope (Assert _)             = Just scope -- used for verification only
+evalStmt scope (Assume _)             = Just scope -- used for verification only
 evalStmt scope (Set name val)         = set <$> evalAExp scope val
   where set int = (name, int) : filter (\ (var, _) -> var /= name) scope
 evalStmt scope (Seq s1 s2)            = do scope' <- evalStmt scope s1

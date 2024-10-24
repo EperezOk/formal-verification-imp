@@ -30,10 +30,11 @@ executable formal-verification-imp
         SMT
     -- other-extensions:
     build-depends:
-        base       ^>=4.17.2.1,
-        parsec     ^>=3.1.16.1,
-        containers ^>=0.6.7,
-        z3         ^>=408.2
+        base          ^>=4.17.2.1,
+        parsec        ^>=3.1.16.1,
+        containers    ^>=0.6.7,
+        z3            ^>=408.2,
+        ansi-terminal ^>= 1.1.1
 
     include-dirs:     "C:\\z3-4.8.12-x64-win\\include"
     extra-lib-dirs:   "C:\\z3-4.8.12-x64-win\\bin"

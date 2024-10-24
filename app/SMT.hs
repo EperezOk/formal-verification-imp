@@ -23,6 +23,7 @@ data Constraint
   | ConstrainGte Int
   deriving (Show)
 
+
 -- | Configuration
 
 bitSize :: Int
@@ -32,6 +33,7 @@ bitSize = 32
 unrollTimes :: Int
 -- how far to unroll loops
 unrollTimes = 30
+
 
 -- | Scope management
 
@@ -50,6 +52,7 @@ getZ3Var :: Id -> Scope -> Z3Var
 getZ3Var name scope = case Map.lookup name scope of
   Just x  -> x
   Nothing -> error $ "Variable " ++ show name ++ " not in scope"
+
 
 -- | Compilation (IMP AST -> Z3 AST)
 
@@ -96,7 +99,9 @@ stmt initialScope = compile initialScope . unrollLoops
                               scope'' <- compile scope s2
                               -- consider both execution branches
                               mkIte cond' scope scope' scope''
-          _             -> error "Loops have to be unrolled before compiling to SMT"
+          Assert cond   -> (Z3.assert =<< bexp scope (Not cond)) >> return scope
+          Assume cond   -> (Z3.assert =<< bexp scope cond) >> return scope
+          _             -> error "Statement not supported by Z3. Make sure to unroll loops before compiling to SMT"
 
         -- returns a program with all loops unrolled exactly `unrollTimes` times
         unrollLoops = \case
@@ -133,7 +138,69 @@ buildZ3Computation :: Map Id Constraint -> Map Id Constraint -> Stmt -> Z3 ()
 -- receives input and output variable constraints and a program.
 -- builds a Z3 computation from the program and the constraints.
 buildZ3Computation inConstrs outConstrs program =
-  do initialScope <- mkScope $ Map.keys inConstrs ++ Map.keys outConstrs
+  do let freeVars = collectUninitVars [] program
+     -- initialize scope with free variables that will be explored by the solver,
+     --  otherwise we would get variable-out-of-scope errors
+     initialScope <- mkScope $ freeVars ++ Map.keys inConstrs ++ Map.keys outConstrs
      constrainVars inConstrs initialScope
      finalScope <- stmt initialScope program
      constrainVars outConstrs finalScope
+
+
+-- | Utility functions
+
+collectAExpVars :: AExp -> [Id]
+-- helper to collect variables from an arithmetic expression
+collectAExpVars (Lit _)         = []
+collectAExpVars (Var name)      = [name]
+collectAExpVars (e1 :+: e2)     = collectAExpVars e1 ++ collectAExpVars e2
+collectAExpVars (e1 :-: e2)     = collectAExpVars e1 ++ collectAExpVars e2
+collectAExpVars (e1 :*: e2)     = collectAExpVars e1 ++ collectAExpVars e2
+collectAExpVars (e1 :/: e2)     = collectAExpVars e1 ++ collectAExpVars e2
+
+collectBExpVars :: BExp -> [Id]
+-- helper to collect variables from a boolean expression
+collectBExpVars True'            = []
+collectBExpVars False'           = []
+collectBExpVars (e1 :<=: e2)     = collectAExpVars e1 ++ collectAExpVars e2
+collectBExpVars (e1 :==: e2)     = collectAExpVars e1 ++ collectAExpVars e2
+collectBExpVars (e1 :|: e2)      = collectBExpVars e1 ++ collectBExpVars e2
+collectBExpVars (e1 :&: e2)      = collectBExpVars e1 ++ collectBExpVars e2
+collectBExpVars (Not e)          = collectBExpVars e
+
+collectUninitVars :: [Id] -> Stmt -> [Id]
+-- collect uninitialized variable names from a program
+collectUninitVars _ Skip = []
+
+collectUninitVars initVars (Set _ val) =
+  -- filter out variables that are already initialized (`initVars`) from
+  --  the list of variables used in the subexpression `val`
+  filter (`notElem` initVars) (collectAExpVars val)
+
+collectUninitVars initVars (Assert cond) =
+  filter (`notElem` initVars) (collectBExpVars cond)
+
+collectUninitVars initVars (Assume cond) =
+  filter (`notElem` initVars) (collectBExpVars cond)
+
+collectUninitVars initVars (While cond body) =
+  let uninitCond = filter (`notElem` initVars) (collectBExpVars cond)
+      uninitBody = collectUninitVars initVars body
+  in uninitCond ++ uninitBody
+
+collectUninitVars initVars (If cond s1 s2) =
+  let uninitCond = filter (`notElem` initVars) (collectBExpVars cond)
+      uninitS1 = collectUninitVars initVars s1
+      uninitS2 = collectUninitVars initVars s2
+  in uninitCond ++ uninitS1 ++ uninitS2
+
+collectUninitVars initVars (Seq s1 s2) =
+  let uninitS1 = collectUninitVars initVars s1
+      updatedInitVars = initVars ++ extractAssignedVars s1 -- for s2, consider assignments in s1
+      uninitS2 = collectUninitVars updatedInitVars s2
+  in uninitS1 ++ uninitS2
+  where extractAssignedVars :: Stmt -> [Id]
+        -- extract variables assigned in a statement
+        extractAssignedVars (Set name _) = [name]
+        extractAssignedVars (Seq s1' s2') = extractAssignedVars s1' ++ extractAssignedVars s2'
+        extractAssignedVars _ = [] -- ignore assignments inside nested scopes (eg. within loops)
