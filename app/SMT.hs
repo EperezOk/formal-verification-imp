@@ -86,32 +86,35 @@ stmt :: Scope -> Stmt -> Z3 Scope
 -- takes a scope and a program, unrolls all loops, compiles into a Z3 computation
 --  and returns the final scope
 stmt initialScope = compile initialScope . unrollLoops
-  where compile scope = \case
-          Skip          -> return scope
-          Set name val  -> do newVal <- aexp scope val
-                              newVar <- mkVar name
-                              Z3.assert =<< Z3.mkEq newVar newVal
-                              return $ Map.insert name newVar scope
-          Seq s1 s2     -> do scope'  <- compile scope s1
-                              compile scope' s2
-          If cond s1 s2 -> do cond'   <- bexp scope cond
-                              scope'  <- compile scope s1
-                              scope'' <- compile scope s2
-                              -- consider both execution branches
-                              mkIte cond' scope scope' scope''
-          Assert cond   -> (Z3.assert =<< bexp scope (Not cond)) >> return scope
-          Assume cond   -> (Z3.assert =<< bexp scope cond) >> return scope
-          _             -> error "Statement not supported by Z3. Make sure to unroll loops before compiling to SMT"
+  where 
+    compile :: Map Id Z3Var -> Stmt -> Z3 (Map Id Z3Var)
+    compile scope = \case
+      Skip          -> return scope
+      Set name val  -> do newVal <- aexp scope val
+                          newVar <- mkVar name
+                          Z3.assert =<< Z3.mkEq newVar newVal
+                          return $ Map.insert name newVar scope
+      Seq s1 s2     -> do scope'  <- compile scope s1
+                          compile scope' s2
+      If cond s1 s2 -> do cond'   <- bexp scope cond
+                          scope'  <- compile scope s1
+                          scope'' <- compile scope s2
+                          -- consider both execution branches
+                          mkIte cond' scope scope' scope''
+      Assert cond   -> (Z3.assert =<< bexp scope (Not cond)) >> return scope
+      Assume cond   -> (Z3.assert =<< bexp scope cond) >> return scope
+      _             -> error "Statement not supported by Z3. Make sure to unroll loops before compiling to SMT"
 
-        -- returns a program with all loops unrolled exactly `unrollTimes` times
-        unrollLoops = \case
-          While cond body -> unroll unrollTimes (While cond body)
-          s1 `Seq` s2   -> unrollLoops s1 `Seq` unrollLoops s2
-          If cond s1 s2 -> If cond (unrollLoops s1) (unrollLoops s2)
-          c             -> c -- non-recursive statements are left unchanged
-          where unroll 0 _                      = Skip
-                unroll n loop@(While cond body) = If cond (body `Seq` unroll (n - 1) loop) Skip
-                unroll _ _                      = undefined -- should never be reached
+    -- returns a program with all loops unrolled exactly `unrollTimes` times
+    unrollLoops :: Stmt -> Stmt
+    unrollLoops = \case
+      While cond body -> unroll unrollTimes (While cond body)
+      s1 `Seq` s2   -> unrollLoops s1 `Seq` unrollLoops s2
+      If cond s1 s2 -> If cond (unrollLoops s1) (unrollLoops s2)
+      c             -> c -- non-recursive statements are left unchanged
+      where unroll 0 _                      = Skip
+            unroll n loop@(While cond body) = If cond (body `Seq` unroll (n - 1) loop) Skip
+            unroll _ _                      = undefined -- should never be reached
 
 mkIte :: AST -> Scope -> Scope -> Scope -> Z3 Scope
 -- asserts new values for each variable in scope depending on which branch was taken
@@ -199,8 +202,9 @@ collectUninitVars initVars (Seq s1 s2) =
       updatedInitVars = initVars ++ extractAssignedVars s1 -- for s2, consider assignments in s1
       uninitS2 = collectUninitVars updatedInitVars s2
   in uninitS1 ++ uninitS2
-  where extractAssignedVars :: Stmt -> [Id]
-        -- extract variables assigned in a statement
-        extractAssignedVars (Set name _) = [name]
-        extractAssignedVars (Seq s1' s2') = extractAssignedVars s1' ++ extractAssignedVars s2'
-        extractAssignedVars _ = [] -- ignore assignments inside nested scopes (eg. within loops)
+  where
+    extractAssignedVars :: Stmt -> [Id]
+    -- extract variables assigned in a statement
+    extractAssignedVars (Set name _) = [name]
+    extractAssignedVars (Seq s1' s2') = extractAssignedVars s1' ++ extractAssignedVars s2'
+    extractAssignedVars _ = [] -- ignore assignments inside nested scopes (eg. within loops)
